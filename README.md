@@ -51,6 +51,18 @@ If you are debugging a script that eventually runs out of memory, try setting a 
 
 Then running the analysis.
 
+### Other example usages
+
+example to break on function call `hebrevc($text)`
+
+```
+gdb php-5.6
+source .gdbinit
+source php-heap.py
+b zif_hebrevc
+run memory_leaker.php
+```
+
 Disclaimers
 ===========
 
