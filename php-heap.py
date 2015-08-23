@@ -349,15 +349,18 @@ class ZendObject(Proxy):
 
 
     def filename(self):
-        return self['ce']['filename'].string()
-
+        filename = self['ce']['info']['user']['filename']
+        if filename:
+            return self['ce']['info']['user']['filename'].string()
+        else:
+            return 'no filename'
 
     def line_start(self):
-        return int(self['ce']['line_start'])
+        return int(self['ce']['info']['user']['line_start'])
 
 
     def line_end(self):
-        return int(self['ce']['line_end'])
+        return int(self['ce']['info']['user']['line_end'])
 
 
     def iterproperties(self):
@@ -958,9 +961,9 @@ class DumpObject(gdb.Command):
     def invoke(self, address, from_tty):
         address = arg_to_address(address)
         z = ZendObject(objptr(voidptr(gdb.Value(address))).dereference())
-        
+
         print('Type:', z.class_name())
-        print('Declared: %s %s:%s' % (z.filename(), z.line_start(), z.line_end()))
+        print('Declared: "%s" (%s-%s)' % (z.filename(), z.line_start(), z.line_end()))
         print('Superclasses:', ', '.join([c.name() for c in z.superclasses()]))
         print()
         print(dump_title)
