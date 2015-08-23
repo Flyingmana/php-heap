@@ -157,7 +157,7 @@ else:
 zend_mm_alignment = 8
 zend_mm_alignment_mask = ~(zend_mm_alignment - 1)
 
-zend_mm_type_mask = 0x03L
+zend_mm_type_mask = 0x03
 
 
 def zend_mm_aligned_size(size):
@@ -209,9 +209,9 @@ def zend_mm_block_at(block, offset):
 
 
 # Constants used to track the status of a particular block. 
-zend_mm_free_block = 0x00L
-zend_mm_used_block = 0x01L
-zend_mm_guard_block = 0x03L
+zend_mm_free_block = 0x00
+zend_mm_used_block = 0x01
+zend_mm_guard_block = 0x03
 
 
 def blocksize(blockptr):
@@ -249,8 +249,8 @@ def arg_to_address(arg):
     Returns an address, given a string argument to a gdb.Function.
     """
     if 'x' in arg:
-        return long(arg, 16)
-    return long(arg)
+        return int(arg, 16)
+    return int(arg)
 
 
 
@@ -296,18 +296,18 @@ class Zval(Proxy):
         t = self.datatype()
         v = self['value']
         if t == 'long':
-            return long(v['lval'])
+            return int(v['lval'])
         if t == 'double':
             return double(v['dval'])
         if t == 'string':
             return v['str']['val'].string()
         if t == 'bool':
-            return 'true' if long(v['lval']) else 'false'
+            return 'true' if int(v['lval']) else 'false'
         if t == 'array':
             # remove the 'L'
-            return hex(long(v['ht']))[:-1]
+            return hex(int(v['ht']))[:-1]
         if t == 'object':
-            return hex(long(self.get_objectptr()))[:-1]
+            return hex(int(self.get_objectptr()))[:-1]
         if t == 'null':
             return '-'
         return ''
@@ -326,7 +326,7 @@ class ZendClass(Proxy):
     def superclasses(self):
         pce = self['parent']
         ret = []
-        while long(pce) != 0:
+        while int(pce) != 0:
             ce = pce.dereference()
             ret.append(ZendClass(ce))
             pce = ce['parent']
@@ -374,7 +374,7 @@ class ObjectHandle(object):
     eg = None
 
     def __init__(self, handle):
-        self.handle = long(handle)
+        self.handle = int(handle)
 
         if ObjectHandle.eg is None:
             ObjectHandle.eg = gdb.selected_frame().read_var('executor_globals')
@@ -385,7 +385,7 @@ class ObjectHandle(object):
     def get_objectptr(self):
         # The handle is used as a simple offset in a global object table, kept
         # in the executor_globals. The entry in the table has the pointer.
-        if self.handle < 0 or self.handle > long(self.store['size']):
+        if self.handle < 0 or self.handle > int(self.store['size']):
             return None
         buckets = self.store['object_buckets']
         bucket = (buckets + self.handle).dereference()['bucket']
@@ -439,7 +439,7 @@ class Accumulator(object):
 
 
     def have_visited(self, address):
-        address = long(address)
+        address = int(address)
         if address in self.visited:
             return True
         self.visited[address] = 1
@@ -480,22 +480,22 @@ class Accumulator(object):
         The label parameter indicates what the keys represents. 
         """
         fmt = '%-40s%-10s  %-10s'
-        print fmt % (label, 'count', 'size')
-        print fmt % (len(label)*'-', '-----', '----')
+        print(fmt % (label, 'count', 'size'))
+        print(fmt % (len(label)*'-', '-----', '----'))
 
-        ss = [(n, s) for n, s in sizes.items()]
+        ss = [(n, s) for n, s in list(sizes.items())]
 
         csum, ssum = 0, 0
-        for n, size in reversed(sorted(ss, key=lambda (_, s): s)):
+        for n, size in reversed(sorted(ss, key=lambda __s: __s[1])):
             count = counts[n]
             csum += count
             ssum += size
             size = human_size_bytes(size) if size > 0 else ''
-            print fmt % (n, count, size)
+            print(fmt % (n, count, size))
             
-        print fmt % ('', '-'*10, '-'*10)
-        print fmt % ('Total:', csum, human_size_bytes(ssum))
-        print
+        print(fmt % ('', '-'*10, '-'*10))
+        print(fmt % ('Total:', csum, human_size_bytes(ssum)))
+        print()
 
 
 
@@ -511,13 +511,13 @@ class ClassAccumulator(Accumulator):
 
 
     def get_size(self, ptr):
-        return self.sizes[long(ptr)]
+        return self.sizes[int(ptr)]
     
 
     def remember_visited_object(self, ptr, classname, size):
         if classname == self.classname:
             Accumulator.remember_visited_object(self, ptr, classname, size)
-            self.sizes[long(ptr)] = size
+            self.sizes[int(ptr)] = size
 
 
 
@@ -558,9 +558,20 @@ class Crawler(object):
         if t not in datatypes:
             return False
 
-        if int(zval['is_ref']) not in (0, 1):
+        """
+        if zval['is_ref__gc']:
+            print("my zval object ref: ",zval)
+            if int(zval['is_ref__gc']) not in (0, 1):
+                return False
+        else:
+            print('nohoho',(zval));
             return False
-        if zval['refcount'] > 75 or zval['refcount'] < 0:
+        """
+        if zval['refcount__gc']:
+            #print("my zval object refcount: ",zval)
+            if zval['refcount__gc'] > 75 or zval['refcount__gc'] < 0:
+                return False
+        else:
             return False
 
         if datatypes[t] in ('array', 'constant_array'):
@@ -632,7 +643,7 @@ class Crawler(object):
         if 'zval_ptr_dtor' in str(dtor):
             return self.visit_zval_ptr_hash(ht)
         else:
-            print 'unknown array, dtor:', dtor
+            print('unknown array, dtor:', dtor)
         return -1000
 
 
@@ -675,7 +686,7 @@ class Crawler(object):
             s += bucket_type.sizeof - char_type.sizeof + b['nKeyLength']
             s += self.visit_zval(b.data_as_zval())
         
-        return long(s)
+        return int(s)
 
 
     def get_objectptr(self, zobj):
@@ -760,8 +771,8 @@ class HeapCrawler(object):
             seg = seg['next_segment']
             self.log('.')
 
-        print ' done.'
-        print
+        print(' done.')
+        print()
 
 
     def log(self, x):
@@ -782,7 +793,7 @@ class HeapCrawler(object):
             # simple integrity check - see zend_check_heap for more 
             # rigorous check.
             if q.dereference()['info']['_prev'] != blocksize(p):
-                print 'Heap corrupted - size field does not match previous'
+                print('Heap corrupted - size field does not match previous')
 
             # the segment is terminated by a special guard block. 
             if zend_mm_is_guard_block(q):
@@ -829,18 +840,18 @@ class HeapCrawler(object):
 
     def print_stats(self):
         block_overhead = self.block_count * block_type.sizeof
-        print 'Real size:', human_size_bytes(self.heap['real_size'])
-        print 'Peak size:', human_size_bytes(self.heap['real_peak'])
-        print 'Memory limit:', human_size_bytes(self.heap['limit'])
-        print
-        print 'Block count:', self.block_count
-        print 'Free blocks:', self.free_block_count
-        print 'Free space:', human_size_bytes(self.free_space)
-        print 'Largest free block:', human_size_bytes(self.largest_free_block)
-        print 'Block header overhead:', human_size_bytes(block_overhead)
-        print 'Used blocks:', self.used_block_count
-        print 'Used space:', human_size_bytes(self.used_space)
-        print
+        print('Real size:', human_size_bytes(self.heap['real_size']))
+        print('Peak size:', human_size_bytes(self.heap['real_peak']))
+        print('Memory limit:', human_size_bytes(self.heap['limit']))
+        print()
+        print('Block count:', self.block_count)
+        print('Free blocks:', self.free_block_count)
+        print('Free space:', human_size_bytes(self.free_space))
+        print('Largest free block:', human_size_bytes(self.largest_free_block))
+        print('Block header overhead:', human_size_bytes(block_overhead))
+        print('Used blocks:', self.used_block_count)
+        print('Used space:', human_size_bytes(self.used_space))
+        print()
         self.results().print_zval_table()
 
 
@@ -863,8 +874,8 @@ class ObjectCrawler(object):
 
     def print_stats(self):
         eg = gdb.selected_frame().read_var('executor_globals')
-        print 'Object store buckets:', eg['objects_store']['size']
-        print
+        print('Object store buckets:', eg['objects_store']['size'])
+        print()
         self.results().print_object_table()
 
 
@@ -908,19 +919,19 @@ class ListObjects(gdb.Command):
         
         fmt = '%-30s %-10s'
         title = fmt % ('Address', 'Size')
-        print title
-        print '-'*len(title)
+        print(title)
+        print('-'*len(title))
 
         xs = c.found_objects()
         sumsizes = 0
         for x in xs:
             s = acc.get_size(x)
-            print fmt % (x, human_size_bytes(s))
+            print(fmt % (x, human_size_bytes(s)))
             sumsizes += s
 
-        print '-'*len(title)
-        print fmt % ('%d instances' % len(xs), human_size_bytes(sumsizes))
-        print
+        print('-'*len(title))
+        print(fmt % ('%d instances' % len(xs), human_size_bytes(sumsizes)))
+        print()
 
 
 
@@ -934,13 +945,13 @@ class DumpArray(gdb.Command):
         address = arg_to_address(address)
         ht = hashtableptr(voidptr(gdb.Value(address))).dereference()
 
-        print dump_title
-        print dump_line
+        print(dump_title)
+        print(dump_line)
         for i, b in zip(itertools.count(1), hashtable_buckets(ht)):
             z = Zval(b.data_as_zval())
             s = human_size_bytes(z.get_size())
-            print dump_format % (i, b.key(), z.display_type(), z.get_value(), s)
-        print
+            print(dump_format % (i, b.key(), z.display_type(), z.get_value(), s))
+        print()
 
 
 class DumpObject(gdb.Command):
@@ -948,19 +959,19 @@ class DumpObject(gdb.Command):
         address = arg_to_address(address)
         z = ZendObject(objptr(voidptr(gdb.Value(address))).dereference())
         
-        print 'Type:', z.class_name()
-        print 'Declared: %s %s:%s' % (z.filename(), z.line_start(), z.line_end())
-        print 'Superclasses:', ', '.join([c.name() for c in z.superclasses()])
-        print
-        print dump_title
-        print dump_line
+        print('Type:', z.class_name())
+        print('Declared: %s %s:%s' % (z.filename(), z.line_start(), z.line_end()))
+        print('Superclasses:', ', '.join([c.name() for c in z.superclasses()]))
+        print()
+        print(dump_title)
+        print(dump_line)
         for i, n, b in zip(itertools.count(1),
                            z.field_names(), 
                            z.iterproperties()):
             z = Zval(b.data_as_zval())
             s = human_size_bytes(z.get_size())
-            print dump_format % (i, n, z.display_type(), z.get_value(), s)
-        print
+            print(dump_format % (i, n, z.display_type(), z.get_value(), s))
+        print()
 
 
 
